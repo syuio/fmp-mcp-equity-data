@@ -108,6 +108,70 @@ class FmpMcpClientTests(unittest.TestCase):
                 ["first", "second"],
             )
 
+    def test_initialize_rejects_unsupported_protocol_version(self):
+        response = client_module.HttpResponse(
+            status=200,
+            headers={"content-type": "application/json", "mcp-session-id": "s1"},
+            text=json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {"protocolVersion": "2024-11-05"},
+                }
+            ),
+        )
+
+        with patch.object(client_module, "http_post", return_value=response) as post:
+            client = client_module.FmpMcpClient("k")
+            with self.assertRaisesRegex(RuntimeError, "Unsupported MCP protocol version"):
+                client.initialize()
+            self.assertEqual(post.call_count, 1)
+            self.assertIsNone(client.session_id)
+
+    def test_request_recovers_once_from_expired_session_404(self):
+        calls = []
+        responses = [
+            client_module.HttpResponse(status=404, headers={}, text="expired"),
+            client_module.HttpResponse(
+                status=200,
+                headers={"content-type": "application/json", "mcp-session-id": "new"},
+                text=json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "result": {"protocolVersion": client_module.PROTOCOL_VERSION},
+                    }
+                ),
+            ),
+            client_module.HttpResponse(status=202, headers={}, text=""),
+            client_module.HttpResponse(
+                status=200,
+                headers={"content-type": "application/json"},
+                text=json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "result": {"tools": [{"name": "quote"}]},
+                    }
+                ),
+            ),
+        ]
+
+        def fake_post(url, headers, payload, timeout):
+            calls.append((headers, payload))
+            return responses.pop(0)
+
+        with patch.object(client_module, "http_post", side_effect=fake_post):
+            client = client_module.FmpMcpClient("k")
+            client.session_id = "old"
+            self.assertEqual(client.list_tools(), [{"name": "quote"}])
+
+        self.assertEqual(calls[0][0]["Mcp-Session-Id"], "old")
+        self.assertNotIn("Mcp-Session-Id", calls[1][0])
+        self.assertEqual(calls[2][0]["Mcp-Session-Id"], "new")
+        self.assertEqual(calls[3][0]["Mcp-Session-Id"], "new")
+        self.assertEqual(calls[3][1]["id"], 1)
+
     def test_extract_tool_result_raises_on_is_error(self):
         result = {
             "result": {
@@ -122,11 +186,44 @@ class FmpMcpClientTests(unittest.TestCase):
         result = {"result": {"structuredContent": {"data": [{"symbol": "NVDA"}]}}}
         self.assertEqual(client_module.extract_tool_result(result), [{"symbol": "NVDA"}])
 
+    def test_extract_tool_result_returns_successful_plain_text(self):
+        result = {
+            "result": {
+                "content": [{"type": "text", "text": "successful plain text"}],
+            }
+        }
+        self.assertEqual(client_module.extract_tool_result(result), "successful plain text")
+
     def test_coerce_value_preserves_leading_zero_identifiers(self):
         self.assertEqual(client_module.coerce_value("000123"), "000123")
         self.assertEqual(client_module.coerce_value("123"), 123)
         self.assertEqual(client_module.coerce_value("12.5"), 12.5)
         self.assertIs(client_module.coerce_value("true"), True)
+
+    def test_init_config_force_creates_backup_before_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            default = tmp_path / "credentials.json"
+            example = tmp_path / "credentials.example.json"
+            default.write_text(json.dumps({"fmp_api_key": "real-key"}), encoding="utf-8")
+            example.write_text(
+                json.dumps({"fmp_api_key": client_module.PLACEHOLDER}),
+                encoding="utf-8",
+            )
+            with patch.object(client_module, "DEFAULT_CONFIG_PATH", default), patch.object(
+                client_module, "EXAMPLE_CONFIG_PATH", example
+            ):
+                client_module.init_config(force=True)
+
+            backup = tmp_path / "credentials.json.bak"
+            self.assertEqual(
+                json.loads(backup.read_text(encoding="utf-8"))["fmp_api_key"],
+                "real-key",
+            )
+            self.assertEqual(
+                json.loads(default.read_text(encoding="utf-8"))["fmp_api_key"],
+                client_module.PLACEHOLDER,
+            )
 
 
 if __name__ == "__main__":

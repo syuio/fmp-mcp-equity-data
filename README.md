@@ -45,6 +45,14 @@ chmod 600 ~/.config/fmp-mcp-equity-data/credentials.json
 
 Do not commit a real API key back to GitHub. The repository only contains `config/credentials.example.json`; real keys should live in environment variables or external config.
 
+If you need to recreate the external config, use:
+
+```bash
+python3 scripts/fmp_mcp_client.py init-config --force
+```
+
+When `--force` overwrites an existing config, the previous file is copied to `~/.config/fmp-mcp-equity-data/credentials.json.bak` first.
+
 ## Optional Key Locations
 
 The client checks key sources in this order:

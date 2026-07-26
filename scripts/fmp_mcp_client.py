@@ -68,6 +68,10 @@ def init_config(force: bool = False) -> Path:
         raise SystemExit(
             f"Config already exists: {DEFAULT_CONFIG_PATH}. Use --force to overwrite."
         )
+    if DEFAULT_CONFIG_PATH.exists() and force:
+        backup_path = DEFAULT_CONFIG_PATH.with_name(DEFAULT_CONFIG_PATH.name + ".bak")
+        shutil.copyfile(DEFAULT_CONFIG_PATH, backup_path)
+        backup_path.chmod(0o600)
     shutil.copyfile(EXAMPLE_CONFIG_PATH, DEFAULT_CONFIG_PATH)
     DEFAULT_CONFIG_PATH.chmod(0o600)
     return DEFAULT_CONFIG_PATH
@@ -163,8 +167,17 @@ class FmpMcpClient:
             headers["Mcp-Session-Id"] = self.session_id
         return headers
 
-    def _post(self, payload: Dict[str, Any], parse_response: bool = True) -> Dict[str, Any]:
+    def _post(
+        self,
+        payload: Dict[str, Any],
+        parse_response: bool = True,
+        recover_session: bool = True,
+    ) -> Dict[str, Any]:
         response = http_post(self.url, self._headers(), payload, self.timeout)
+        if response.status == 404 and self.session_id and recover_session:
+            self.session_id = None
+            self.initialize()
+            response = http_post(self.url, self._headers(), payload, self.timeout)
         if response.status >= 400:
             raise RuntimeError(f"MCP request failed {response.status}: {response.text[:1000]}")
         self.session_id = response.headers.get("mcp-session-id") or self.session_id
@@ -196,9 +209,17 @@ class FmpMcpClient:
                 "clientInfo": {"name": "fmp-mcp-equity-data-client", "version": "1.0.0"},
             },
         )
+        negotiated = result.get("result", {}).get("protocolVersion")
+        if negotiated != PROTOCOL_VERSION:
+            self.session_id = None
+            raise RuntimeError(
+                f"Unsupported MCP protocol version: {negotiated!r}. "
+                f"Expected {PROTOCOL_VERSION!r}."
+            )
         self._post(
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             parse_response=False,
+            recover_session=False,
         )
         return result
 
@@ -249,7 +270,10 @@ def extract_tool_result(call_result: Dict[str, Any]) -> Any:
     raw = content_text(result)
     if not raw:
         return result
-    parsed = json.loads(raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
     if isinstance(parsed, dict) and "data" in parsed:
         return parsed["data"]
     return parsed

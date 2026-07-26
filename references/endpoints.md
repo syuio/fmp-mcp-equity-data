@@ -5,9 +5,9 @@ Use this as a starting map. Always prefer `scripts/fmp_mcp_client.py list-tools 
 ## Core MCP Commands
 
 ```bash
-python scripts/fmp_mcp_client.py list-tools --query statements
-python scripts/fmp_mcp_client.py describe-tool statements
-python scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
+python3 scripts/fmp_mcp_client.py list-tools --query statements
+python3 scripts/fmp_mcp_client.py describe-tool statements
+python3 scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
 ```
 
 ## Common Tools And Endpoints
