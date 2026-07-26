@@ -1,6 +1,6 @@
 ---
 name: fmp-mcp-equity-data
-description: Direct Financial Modeling Prep MCP integration for US equity analysis. Use when an AI assistant needs verified stock market data from FMP MCP, including prices, quotes, financial statements, ratios, metrics, company profile, industry/sector data, peers, analyst data, calendars, or other FMP endpoints; especially use when avoiding third-party data wrappers or when a user asks to analyze a US stock with direct FMP MCP data.
+description: Direct Financial Modeling Prep MCP integration for US equity data retrieval. Use when an AI assistant needs direct FMP MCP data for a named ticker or explicit FMP data task, such as stock quotes, price history, financial statements, ratios, metrics, company profile, sector/industry data, peers, analyst data, or calendars; especially use when the user asks to avoid third-party wrappers.
 ---
 
 # FMP MCP Equity Data
@@ -9,7 +9,7 @@ description: Direct Financial Modeling Prep MCP integration for US equity analys
 
 Use Financial Modeling Prep's remote MCP server directly for US equity data. Do not use third-party data wrappers or yfinance when this skill is triggered unless the user explicitly asks for them.
 
-The bundled script speaks MCP Streamable HTTP JSON-RPC directly, so it works even when `fastmcp` is unavailable.
+The bundled script speaks MCP Streamable HTTP JSON-RPC directly using only Python's standard library, so no Python package dependencies are required.
 
 ## Key Lookup
 
@@ -19,9 +19,14 @@ Use the first available key source:
 2. Environment variable: `FMP_API_KEY`
 3. Skill-specific config file set by `FMP_MCP_CONFIG`
 4. Default skill-specific config file: `~/.config/fmp-mcp-equity-data/credentials.json`
-5. Bundled skill config file: `config/credentials.json`
 
-The default config file must be JSON:
+Create the default external config file from the bundled example:
+
+```bash
+python3 scripts/fmp_mcp_client.py init-config
+```
+
+Then edit `~/.config/fmp-mcp-equity-data/credentials.json` and replace the placeholder value. The config file must be JSON:
 
 ```json
 {
@@ -35,7 +40,7 @@ Recommended permissions on Unix-like systems:
 chmod 600 ~/.config/fmp-mcp-equity-data/credentials.json
 ```
 
-For a cloned skill repository, users may instead edit the bundled `config/credentials.json` and replace the placeholder value. Do not commit a real API key.
+Do not store a real API key in the skill repository. The bundled `config/credentials.example.json` is only a template.
 
 Never print the key. Only report whether a key is present.
 
@@ -44,30 +49,30 @@ Never print the key. Only report whether a key is present.
 List available MCP tools:
 
 ```bash
-python scripts/fmp_mcp_client.py list-tools --query statements
+python3 scripts/fmp_mcp_client.py list-tools --query statements
 ```
 
 Call an MCP tool:
 
 ```bash
-python scripts/fmp_mcp_client.py call statements \
+python3 scripts/fmp_mcp_client.py call statements \
   --arg endpoint=income-statement \
   --arg symbol=NVDA \
   --arg period=quarter \
   --arg limit=4
 ```
 
-Run with any Python environment that has `requests` installed:
+Run with Python 3.9+:
 
 ```bash
-python scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
+python3 scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
 ```
 
 ## Workflow
 
 1. Normalize ticker symbols to uppercase.
 2. Confirm the FMP key is available without revealing it:
-   `python scripts/fmp_mcp_client.py check-key`
+   `python3 scripts/fmp_mcp_client.py check-key`
 3. For unfamiliar data needs, run `list-tools --query <topic>` and inspect tool descriptions/endpoints.
 4. Call `tools/call` through the script with explicit endpoint arguments.
 5. Use returned fields as provided by FMP MCP. For financial statements, expect native FMP field names such as `revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `inventory`, `totalAssets`, and `totalCurrentAssets`.

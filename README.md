@@ -14,10 +14,17 @@ Replace `<SKILLS_DIR>` with the skills directory used by your application, such 
 
 ## Configure The FMP API Key
 
-Open the bundled key file:
+Create the external key file from the bundled example:
 
 ```bash
-nano <SKILLS_DIR>/fmp-mcp-equity-data/config/credentials.json
+cd <SKILLS_DIR>/fmp-mcp-equity-data
+python3 scripts/fmp_mcp_client.py init-config
+```
+
+Open the created key file:
+
+```bash
+nano ~/.config/fmp-mcp-equity-data/credentials.json
 ```
 
 Replace only the placeholder value:
@@ -33,16 +40,10 @@ with your real FMP API key, keeping the JSON structure unchanged.
 Then restrict file permissions on Unix-like systems:
 
 ```bash
-chmod 600 <SKILLS_DIR>/fmp-mcp-equity-data/config/credentials.json
+chmod 600 ~/.config/fmp-mcp-equity-data/credentials.json
 ```
 
-Do not commit a real API key back to GitHub.
-
-If you installed the skill from a Git checkout and edited the bundled placeholder file, you can reduce accidental commits with:
-
-```bash
-git update-index --skip-worktree config/credentials.json
-```
+Do not commit a real API key back to GitHub. The repository only contains `config/credentials.example.json`; real keys should live in environment variables or external config.
 
 ## Optional Key Locations
 
@@ -52,26 +53,21 @@ The client checks key sources in this order:
 2. `FMP_API_KEY`
 3. `FMP_MCP_CONFIG`, pointing to a JSON file with `fmp_api_key`
 4. `~/.config/fmp-mcp-equity-data/credentials.json`
-5. Bundled `config/credentials.json`
 
-The bundled `config/credentials.json` exists so users only need to replace the placeholder, not create the file manually.
+The `init-config` command creates `~/.config/fmp-mcp-equity-data/credentials.json` from the bundled example so users do not need to create the file manually.
 
 ## Requirements
 
-The helper script requires Python with `requests` installed.
-
-```bash
-python -m pip install requests
-```
+The helper script uses only Python's standard library. Use Python 3.9 or newer.
 
 ## Verify
 
 From the skill directory:
 
 ```bash
-python scripts/fmp_mcp_client.py check-key
-python scripts/fmp_mcp_client.py list-tools --query quote
-python scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
+python3 scripts/fmp_mcp_client.py check-key
+python3 scripts/fmp_mcp_client.py list-tools --query quote
+python3 scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
 ```
 
 ## Examples
@@ -79,23 +75,23 @@ python scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NV
 Latest quote:
 
 ```bash
-python scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
+python3 scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
 ```
 
 Annual income statements:
 
 ```bash
-python scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=annual --arg limit=4
+python3 scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=annual --arg limit=4
 ```
 
 Quarterly balance sheets:
 
 ```bash
-python scripts/fmp_mcp_client.py call statements --arg endpoint=balance-sheet-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
+python3 scripts/fmp_mcp_client.py call statements --arg endpoint=balance-sheet-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
 ```
 
 Historical prices:
 
 ```bash
-python scripts/fmp_mcp_client.py call chart --arg endpoint=historical-price-eod-full --arg symbol=NVDA --arg from_date=2026-01-01 --arg to_date=2026-07-24
+python3 scripts/fmp_mcp_client.py call chart --arg endpoint=historical-price-eod-full --arg symbol=NVDA --arg from_date=2026-01-01 --arg to_date=2026-07-24
 ```
