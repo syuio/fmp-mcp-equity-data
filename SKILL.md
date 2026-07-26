@@ -1,0 +1,99 @@
+---
+name: fmp-mcp-equity-data
+description: Direct Financial Modeling Prep MCP integration for US equity analysis. Use when an AI assistant needs verified stock market data from FMP MCP, including prices, quotes, financial statements, ratios, metrics, company profile, industry/sector data, peers, analyst data, calendars, or other FMP endpoints; especially use when avoiding third-party data wrappers or when a user asks to analyze a US stock with direct FMP MCP data.
+---
+
+# FMP MCP Equity Data
+
+## Overview
+
+Use Financial Modeling Prep's remote MCP server directly for US equity data. Do not use third-party data wrappers or yfinance when this skill is triggered unless the user explicitly asks for them.
+
+The bundled script speaks MCP Streamable HTTP JSON-RPC directly, so it works even when `fastmcp` is unavailable.
+
+## Key Lookup
+
+Use the first available key source:
+
+1. Environment variable: `FMP_MCP_API_KEY`
+2. Environment variable: `FMP_API_KEY`
+3. Skill-specific config file set by `FMP_MCP_CONFIG`
+4. Default skill-specific config file: `~/.config/fmp-mcp-equity-data/credentials.json`
+5. Bundled skill config file: `config/credentials.json`
+
+The default config file must be JSON:
+
+```json
+{
+  "fmp_api_key": "REPLACE_WITH_YOUR_FMP_API_KEY"
+}
+```
+
+Recommended permissions on Unix-like systems:
+
+```bash
+chmod 600 ~/.config/fmp-mcp-equity-data/credentials.json
+```
+
+For a cloned skill repository, users may instead edit the bundled `config/credentials.json` and replace the placeholder value. Do not commit a real API key.
+
+Never print the key. Only report whether a key is present.
+
+## Quick Start
+
+List available MCP tools:
+
+```bash
+python scripts/fmp_mcp_client.py list-tools --query statements
+```
+
+Call an MCP tool:
+
+```bash
+python scripts/fmp_mcp_client.py call statements \
+  --arg endpoint=income-statement \
+  --arg symbol=NVDA \
+  --arg period=quarter \
+  --arg limit=4
+```
+
+Run with any Python environment that has `requests` installed:
+
+```bash
+python scripts/fmp_mcp_client.py call statements --arg endpoint=income-statement --arg symbol=NVDA --arg period=quarter --arg limit=4
+```
+
+## Workflow
+
+1. Normalize ticker symbols to uppercase.
+2. Confirm the FMP key is available without revealing it:
+   `python scripts/fmp_mcp_client.py check-key`
+3. For unfamiliar data needs, run `list-tools --query <topic>` and inspect tool descriptions/endpoints.
+4. Call `tools/call` through the script with explicit endpoint arguments.
+5. Use returned fields as provided by FMP MCP. For financial statements, expect native FMP field names such as `revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `inventory`, `totalAssets`, and `totalCurrentAssets`.
+6. If FMP returns a restricted endpoint/subscription error, stop and tell the user which FMP endpoint requires an upgraded plan or separate subscription.
+7. When deriving metrics, state formulas and preserve raw period/date context.
+
+## Common Data Routes
+
+Read `references/endpoints.md` when selecting endpoints for a new analysis type or when the exact tool name is unclear.
+
+Typical examples:
+
+- Price history: tool `chart`, endpoint `historical-price-eod-full`
+- Quote/profile: use `list-tools --query profile` or `list-tools --query quote`; choose the MCP tool that exposes the desired FMP endpoint
+- Financial statements: tool `statements`, endpoints `income-statement`, `balance-sheet-statement`, `cashflow-statement`
+- Ratios/metrics: tool `statements`, endpoints containing `ratios`, `key-metrics`, or `enterprise-values`
+- Industry/sector/peers: use `marketPerformance`, `directory`, and peer/profile-related tools discovered by `list-tools`
+
+## Output Guidance
+
+Use compact tables for user-facing analysis. Include:
+
+- Stock code
+- Date/period
+- Raw values needed to audit calculations
+- Formula/metric definitions
+- A clear note when data is unavailable due to subscription restrictions
+
+Do not mention internal MCP handshake details unless the user asks how the data was retrieved.

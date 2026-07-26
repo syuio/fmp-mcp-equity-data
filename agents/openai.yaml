@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMP MCP Equity Data"
+  short_description: "Fetch US equity data through FMP MCP"
+  default_prompt: "Use $fmp-mcp-equity-data to fetch verified US stock data from FMP MCP."
