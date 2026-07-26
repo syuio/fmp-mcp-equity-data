@@ -2,11 +2,15 @@
 """Small standard-library JSON-RPC client for FMP's remote MCP server."""
 
 import argparse
+import http.client
 import json
 import os
 import re
 import shutil
+import socket
+import ssl
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -18,6 +22,10 @@ MCP_URL_TEMPLATE = "https://financialmodelingprep.com/mcp?apikey={api_key}"
 MCP_URL_PLACEHOLDER = MCP_URL_TEMPLATE.format(api_key="YOUR_FMP_API_KEY")
 MCP_URL_REDACTED = MCP_URL_TEMPLATE.format(api_key="REDACTED")
 PROTOCOL_VERSION = "2025-03-26"
+USER_AGENT = "fmp-mcp-equity-data/1.0"
+MAX_HTTP_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 0.5
+RETRYABLE_HTTP_STATUSES = {429, 502, 503, 504}
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "fmp-mcp-equity-data" / "credentials.json"
 EXAMPLE_CONFIG_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "credentials.example.json"
@@ -84,26 +92,93 @@ def http_post(
     headers: Dict[str, str],
     payload: Dict[str, Any],
     timeout: int,
+    max_retries: int = MAX_HTTP_RETRIES,
+    backoff_seconds: float = RETRY_BACKOFF_SECONDS,
 ) -> HttpResponse:
     body = json.dumps(payload).encode("utf-8")
-    request = Request(url, data=body, headers=headers, method="POST")
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            text = response.read().decode("utf-8")
-            return HttpResponse(
-                status=response.status,
-                headers={key.lower(): value for key, value in response.headers.items()},
+    attempts = max(0, max_retries) + 1
+    last_error: Optional[BaseException] = None
+
+    for attempt in range(attempts):
+        request = Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                text = response.read().decode("utf-8")
+                return HttpResponse(
+                    status=response.status,
+                    headers={key.lower(): value for key, value in response.headers.items()},
+                    text=text,
+                )
+        except HTTPError as exc:
+            text = exc.read().decode("utf-8", errors="replace")
+            result = HttpResponse(
+                status=exc.code,
+                headers={key.lower(): value for key, value in exc.headers.items()},
                 text=text,
             )
-    except HTTPError as exc:
-        text = exc.read().decode("utf-8", errors="replace")
-        return HttpResponse(
-            status=exc.code,
-            headers={key.lower(): value for key, value in exc.headers.items()},
-            text=text,
-        )
-    except URLError as exc:
-        raise RuntimeError(f"MCP network request failed: {exc}") from exc
+            if exc.code in RETRYABLE_HTTP_STATUSES and attempt < attempts - 1:
+                sleep_for = retry_delay(attempt, result.headers, backoff_seconds)
+                time.sleep(sleep_for)
+                continue
+            return result
+        except URLError as exc:
+            last_error = exc
+            if is_retryable_url_error(exc) and attempt < attempts - 1:
+                time.sleep(retry_delay(attempt, {}, backoff_seconds))
+                continue
+            break
+        except (
+            ConnectionResetError,
+            TimeoutError,
+            socket.timeout,
+            ssl.SSLError,
+            http.client.RemoteDisconnected,
+        ) as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                time.sleep(retry_delay(attempt, {}, backoff_seconds))
+                continue
+            break
+
+    if last_error is not None:
+        raise RuntimeError(f"MCP network request failed: {last_error}") from last_error
+    raise RuntimeError("MCP network request failed without a response.")
+
+
+def retry_delay(attempt: int, headers: Dict[str, str], backoff_seconds: float) -> float:
+    retry_after = headers.get("retry-after")
+    if retry_after:
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            pass
+    return backoff_seconds * (2**attempt)
+
+
+def is_retryable_url_error(exc: URLError) -> bool:
+    reason = getattr(exc, "reason", exc)
+    if isinstance(
+        reason,
+        (
+            ConnectionResetError,
+            TimeoutError,
+            socket.timeout,
+            ssl.SSLError,
+            http.client.RemoteDisconnected,
+        ),
+    ):
+        return True
+    message = str(exc).lower()
+    retryable_markers = (
+        "unexpected_eof_while_reading",
+        "unexpected eof",
+        "eof occurred",
+        "connection reset",
+        "connection aborted",
+        "remote end closed connection",
+        "timed out",
+    )
+    return any(marker in message for marker in retryable_markers)
 
 
 def parse_json_response(text: str) -> Dict[str, Any]:
@@ -161,6 +236,7 @@ class FmpMcpClient:
         self.headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
+            "User-Agent": USER_AGENT,
         }
 
     def _headers(self) -> Dict[str, str]:

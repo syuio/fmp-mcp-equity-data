@@ -1,6 +1,7 @@
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .DS_Store
 .env
-config/credentials.json
-config/*.local.json
+skills/fmp-mcp-equity-data/config/credentials.json
+skills/fmp-mcp-equity-data/config/*.local.json

@@ -15,7 +15,7 @@ For MCP-compatible applications, prefer the official Remote MCP Server URL:
 https://financialmodelingprep.com/mcp?apikey=YOUR_FMP_API_KEY
 ```
 
-The bundled script is a standard-library fallback for generating the connection URL, checking credentials, discovering tools, and making direct JSON-RPC calls when a native MCP client is unavailable.
+The bundled script is a standard-library fallback for generating the connection URL, checking credentials, discovering tools, and making direct JSON-RPC calls when a native MCP client is unavailable. It sends a fixed `User-Agent` and retries transient TLS EOF, connection reset, HTTP 429, and HTTP 502/503/504 failures.
 
 ## Key Lookup
 

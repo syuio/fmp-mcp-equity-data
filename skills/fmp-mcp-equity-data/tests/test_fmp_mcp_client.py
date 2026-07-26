@@ -1,11 +1,13 @@
 import importlib.util
 import json
 import os
+import ssl
 import tempfile
 import unittest
 from argparse import Namespace
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 
 
@@ -128,10 +130,94 @@ class FmpMcpClientTests(unittest.TestCase):
 
         with patch.object(client_module, "http_post", side_effect=fake_post):
             client = client_module.FmpMcpClient("k")
+            self.assertEqual(client.headers["User-Agent"], client_module.USER_AGENT)
             self.assertEqual(
                 [tool["name"] for tool in client.list_tools()],
                 ["first", "second"],
             )
+
+    def test_http_post_retries_retryable_http_status(self):
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append((request, timeout))
+            if len(calls) == 1:
+                raise HTTPError(
+                    request.full_url,
+                    503,
+                    "Service Unavailable",
+                    {"Content-Type": "text/plain"},
+                    BytesIO(b"temporary"),
+                )
+
+            class FakeResponse:
+                status = 200
+                headers = {"Content-Type": "application/json"}
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, traceback):
+                    return False
+
+                def read(self):
+                    return b'{"ok": true}'
+
+            return FakeResponse()
+
+        with patch.object(client_module, "urlopen", side_effect=fake_urlopen), patch.object(
+            client_module.time, "sleep"
+        ) as sleep:
+            response = client_module.http_post(
+                "https://example.test/mcp",
+                {"User-Agent": client_module.USER_AGENT},
+                {"jsonrpc": "2.0"},
+                timeout=10,
+                max_retries=1,
+                backoff_seconds=0,
+            )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(calls), 2)
+        sleep.assert_called_once_with(0)
+
+    def test_http_post_retries_tls_eof_url_error(self):
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append((request, timeout))
+            if len(calls) == 1:
+                raise URLError(ssl.SSLError("UNEXPECTED_EOF_WHILE_READING"))
+
+            class FakeResponse:
+                status = 200
+                headers = {"Content-Type": "application/json"}
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, traceback):
+                    return False
+
+                def read(self):
+                    return b'{"ok": true}'
+
+            return FakeResponse()
+
+        with patch.object(client_module, "urlopen", side_effect=fake_urlopen), patch.object(
+            client_module.time, "sleep"
+        ):
+            response = client_module.http_post(
+                "https://example.test/mcp",
+                {"User-Agent": client_module.USER_AGENT},
+                {"jsonrpc": "2.0"},
+                timeout=10,
+                max_retries=1,
+                backoff_seconds=0,
+            )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(calls), 2)
 
     def test_initialize_rejects_unsupported_protocol_version(self):
         response = client_module.HttpResponse(
@@ -249,6 +335,23 @@ class FmpMcpClientTests(unittest.TestCase):
                 json.loads(default.read_text(encoding="utf-8"))["fmp_api_key"],
                 client_module.PLACEHOLDER,
             )
+
+
+@unittest.skipUnless(
+    os.environ.get("FMP_INTEGRATION_TEST") == "1",
+    "Set FMP_INTEGRATION_TEST=1 to run live FMP MCP checks.",
+)
+class FmpMcpIntegrationTests(unittest.TestCase):
+    def test_live_tool_discovery_and_quote(self):
+        client = client_module.FmpMcpClient(client_module.load_api_key(), timeout=60)
+        client.initialize()
+
+        tools = client.list_tools()
+        self.assertTrue(any(tool.get("name") == "quote" for tool in tools))
+
+        quote = client.call_tool("quote", {"endpoint": "quote", "symbol": "AAPL"})
+        self.assertIsInstance(quote, list)
+        self.assertEqual(quote[0]["symbol"], "AAPL")
 
 
 if __name__ == "__main__":

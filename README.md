@@ -4,13 +4,20 @@ Direct Financial Modeling Prep MCP integration for US equity analysis. This skil
 
 ## Install
 
-Clone this repository into your assistant application's skills directory.
+Clone this repository, then install the skill subdirectory into your assistant application's skills directory.
 
 ```bash
-git clone git@github.com:syuio/fmp-mcp-equity-data.git <SKILLS_DIR>/fmp-mcp-equity-data
+git clone git@github.com:syuio/fmp-mcp-equity-data.git
+cp -R fmp-mcp-equity-data/skills/fmp-mcp-equity-data <SKILLS_DIR>/
 ```
 
 Replace `<SKILLS_DIR>` with the skills directory used by your application, such as a local skills folder configured for ChatGPT, Claude, or another AI assistant.
+
+If your assistant application supports installing from a repository subdirectory, point it at:
+
+```text
+skills/fmp-mcp-equity-data
+```
 
 ## Configure The FMP API Key
 
@@ -43,7 +50,7 @@ Then restrict file permissions on Unix-like systems:
 chmod 600 ~/.config/fmp-mcp-equity-data/credentials.json
 ```
 
-Do not commit a real API key back to GitHub. The repository only contains `config/credentials.example.json`; real keys should live in environment variables or external config.
+Do not commit a real API key back to GitHub. The installable skill only contains `config/credentials.example.json`; real keys should live in environment variables or external config.
 
 If you need to recreate the external config, use:
 
@@ -94,6 +101,8 @@ The `init-config` command creates `~/.config/fmp-mcp-equity-data/credentials.jso
 
 The helper script uses only Python's standard library. Use Python 3.9 or newer.
 
+The helper script sends `User-Agent: fmp-mcp-equity-data/1.0` and performs limited exponential-backoff retries for transient TLS EOF, connection reset, HTTP 429, and HTTP 502/503/504 failures.
+
 ## Verify
 
 From the skill directory:
@@ -104,6 +113,14 @@ python3 scripts/fmp_mcp_client.py connection-url --redacted
 python3 scripts/fmp_mcp_client.py list-tools --query quote
 python3 scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
 ```
+
+Optional live integration test:
+
+```bash
+FMP_INTEGRATION_TEST=1 python3 -m unittest discover -s tests -v
+```
+
+This test uses your configured FMP key and calls the hosted MCP server.
 
 ## Examples
 
