@@ -53,6 +53,32 @@ python3 scripts/fmp_mcp_client.py init-config --force
 
 When `--force` overwrites an existing config, the previous file is copied to `~/.config/fmp-mcp-equity-data/credentials.json.bak` first.
 
+## Connect An MCP-Compatible App
+
+FMP's hosted Remote MCP Server URL is:
+
+```text
+https://financialmodelingprep.com/mcp?apikey=YOUR_FMP_API_KEY
+```
+
+In an MCP-compatible app, add a custom remote MCP server and paste that URL with your actual FMP API key. For example, Claude-style connectors generally ask for a "Remote MCP Server URL"; Cursor and other MCP clients have equivalent remote server settings.
+
+If you configured the key with this skill, you can print a placeholder URL:
+
+```bash
+python3 scripts/fmp_mcp_client.py connection-url
+```
+
+or explicitly print the full URL for copy/paste:
+
+```bash
+python3 scripts/fmp_mcp_client.py connection-url --show-key
+```
+
+The full URL contains your FMP API key. Treat it as a secret.
+
+For custom Python agents, FMP's official docs show `fastmcp.Client` connecting to the same URL. The bundled script is only a no-dependency fallback and diagnostic helper.
+
 ## Optional Key Locations
 
 The client checks key sources in this order:
@@ -74,6 +100,7 @@ From the skill directory:
 
 ```bash
 python3 scripts/fmp_mcp_client.py check-key
+python3 scripts/fmp_mcp_client.py connection-url --redacted
 python3 scripts/fmp_mcp_client.py list-tools --query quote
 python3 scripts/fmp_mcp_client.py call quote --arg endpoint=quote --arg symbol=NVDA
 ```

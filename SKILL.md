@@ -7,9 +7,15 @@ description: Direct Financial Modeling Prep MCP integration for US equity data r
 
 ## Overview
 
-Use Financial Modeling Prep's remote MCP server directly for US equity data. Do not use third-party data wrappers or yfinance when this skill is triggered unless the user explicitly asks for them.
+Use Financial Modeling Prep's hosted remote MCP server directly for US equity data. Do not use third-party data wrappers or yfinance when this skill is triggered unless the user explicitly asks for them.
 
-The bundled script speaks MCP Streamable HTTP JSON-RPC directly using only Python's standard library, so no Python package dependencies are required.
+For MCP-compatible applications, prefer the official Remote MCP Server URL:
+
+```text
+https://financialmodelingprep.com/mcp?apikey=YOUR_FMP_API_KEY
+```
+
+The bundled script is a standard-library fallback for generating the connection URL, checking credentials, discovering tools, and making direct JSON-RPC calls when a native MCP client is unavailable.
 
 ## Key Lookup
 
@@ -44,7 +50,23 @@ Do not store a real API key in the skill repository. The bundled `config/credent
 
 Never print the key. Only report whether a key is present.
 
+Exception: if the user explicitly asks for the full Remote MCP Server URL, run `python3 scripts/fmp_mcp_client.py connection-url --show-key` and warn that the URL contains their FMP API key.
+
 ## Quick Start
+
+For a native MCP client, configure the remote server URL above in the client. To print the placeholder URL:
+
+```bash
+python3 scripts/fmp_mcp_client.py connection-url
+```
+
+To print the full URL from the configured key for copy/paste into a MCP-compatible app:
+
+```bash
+python3 scripts/fmp_mcp_client.py connection-url --show-key
+```
+
+Use direct tool calls only when a native MCP client is unavailable or when debugging.
 
 List available MCP tools:
 

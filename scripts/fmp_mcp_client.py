@@ -15,6 +15,8 @@ from urllib.request import Request, urlopen
 
 
 MCP_URL_TEMPLATE = "https://financialmodelingprep.com/mcp?apikey={api_key}"
+MCP_URL_PLACEHOLDER = MCP_URL_TEMPLATE.format(api_key="YOUR_FMP_API_KEY")
+MCP_URL_REDACTED = MCP_URL_TEMPLATE.format(api_key="REDACTED")
 PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "fmp-mcp-equity-data" / "credentials.json"
 EXAMPLE_CONFIG_PATH = (
@@ -326,6 +328,15 @@ def command_config_path(_: argparse.Namespace) -> None:
     print(str(path))
 
 
+def command_connection_url(args: argparse.Namespace) -> None:
+    if args.show_key:
+        print(MCP_URL_TEMPLATE.format(api_key=load_api_key()))
+    elif args.redacted:
+        print(MCP_URL_REDACTED)
+    else:
+        print(MCP_URL_PLACEHOLDER)
+
+
 def command_list_tools(args: argparse.Namespace) -> None:
     client, _ = make_client(args.timeout)
     tools = client.list_tools()
@@ -375,6 +386,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     config_path = subparsers.add_parser("config-path")
     config_path.set_defaults(func=command_config_path)
+
+    connection_url = subparsers.add_parser("connection-url")
+    connection_url.add_argument(
+        "--show-key",
+        action="store_true",
+        help="Print the full Remote MCP Server URL using the configured API key.",
+    )
+    connection_url.add_argument(
+        "--redacted",
+        action="store_true",
+        help="Print a redacted Remote MCP Server URL.",
+    )
+    connection_url.set_defaults(func=command_connection_url)
 
     list_tools = subparsers.add_parser("list-tools")
     list_tools.add_argument("--query", help="Filter tools by name, title, or description")

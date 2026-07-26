@@ -3,6 +3,8 @@ import json
 import os
 import tempfile
 import unittest
+from argparse import Namespace
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,6 +47,29 @@ class FmpMcpClientTests(unittest.TestCase):
             with patch.dict(os.environ, {"FMP_MCP_CONFIG": str(path)}, clear=True):
                 with self.assertRaises(SystemExit):
                     client_module.load_api_key()
+
+    def test_connection_url_defaults_to_placeholder(self):
+        args = Namespace(show_key=False, redacted=False)
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            client_module.command_connection_url(args)
+        self.assertEqual(stdout.getvalue().strip(), client_module.MCP_URL_PLACEHOLDER)
+
+    def test_connection_url_can_be_redacted(self):
+        args = Namespace(show_key=False, redacted=True)
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            client_module.command_connection_url(args)
+        self.assertEqual(stdout.getvalue().strip(), client_module.MCP_URL_REDACTED)
+
+    def test_connection_url_requires_explicit_show_key_for_full_url(self):
+        args = Namespace(show_key=True, redacted=False)
+        with patch.dict(os.environ, {"FMP_MCP_API_KEY": "secret-key"}, clear=True), patch(
+            "sys.stdout", new_callable=StringIO
+        ) as stdout:
+            client_module.command_connection_url(args)
+        self.assertEqual(
+            stdout.getvalue().strip(),
+            "https://financialmodelingprep.com/mcp?apikey=secret-key",
+        )
 
     def test_sse_parser_handles_crlf_and_matches_request_id(self):
         response = client_module.HttpResponse(
